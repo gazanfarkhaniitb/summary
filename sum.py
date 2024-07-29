@@ -2,18 +2,15 @@ import streamlit as st
 import fitz  # PyMuPDF
 import openai
 import numpy as np
-import os
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from io import BytesIO
-from dotenv import load_dotenv
-load_dotenv()
 
 # Set your OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = st.secrets["general"]["OPENAI_API_KEY"]
 
 def extract_text_from_pdf(pdf_path):
     """Load PDF and extract text."""
@@ -67,15 +64,19 @@ def generate_embeddings_for_chunks(chunks):
     return np.array(embeddings)
 
 def extract_information_with_openai(text_chunk, prompt):
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=500  # Adjusting max tokens to handle the output size
-    )
-    return response['choices'][0]['message']['content'].strip()
+    try:
+        response = openai.Completion.create(
+            model="gpt-3.5-turbo",
+            prompt=prompt + "\n\n" + text_chunk,
+            max_tokens=500,
+            n=1,
+            stop=None,
+            temperature=0.7,
+        )
+        return response['choices'][0]['text'].strip()
+    except Exception as e:
+        st.error(f"OpenAI API error: {e}")
+        return ""
 
 def generate_summary_and_extract_info(chunks):
     summary_prompt = "I am a contractor and want to know if I can bid for this project or not. So please generate a 500-word technical summary of the project from the following text. The summary should include the name of the project, location of the project site, and important dates (start, end, other key dates) of the project. Make sure to give information in concise points."
